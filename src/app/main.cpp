@@ -21,11 +21,13 @@ int main(int argc, char* argv[]) {
     QCommandLineOption shot("screenshot", "Save a screenshot to <file> and quit.", "file");
     QCommandLineOption delay("delay", "Milliseconds to wait before the screenshot (default 4000).", "ms", "4000");
     QCommandLineOption symbol("symbol", "Symbol to select at start.", "symbol");
-    cli.addOptions({offline, shot, delay, symbol});
+    QCommandLineOption interval("interval", "Candle interval to select at start (e.g. 1m, 1h, 1d).", "id");
+    cli.addOptions({offline, shot, delay, symbol, interval});
     cli.process(app);
 
     ql::AppController controller(cli.isSet(offline));
     if (cli.isSet(symbol)) controller.select(cli.value(symbol));
+    if (cli.isSet(interval)) controller.setInterval(cli.value(interval));
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("app", &controller);

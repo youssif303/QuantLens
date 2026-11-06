@@ -13,7 +13,8 @@ add_library(ql_core STATIC
     src/core/Indicators.cpp
     src/core/Csv.cpp
     src/core/Forecast.cpp
-    src/core/Backtest.cpp)
+    src/core/Backtest.cpp
+    src/core/Resample.cpp)
 target_include_directories(ql_core PUBLIC src)
 if(MSVC)
     target_compile_options(ql_core PRIVATE /W4)

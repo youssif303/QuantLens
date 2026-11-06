@@ -32,6 +32,21 @@ const QList<Asset>& catalog() {
     return c;
 }
 
+const QList<IntervalInfo>& intervals() {
+    static const QList<IntervalInfo> l = {
+        {"1s", "1s", 1},    {"1m", "1m", 60},      {"5m", "5m", 300},   {"15m", "15m", 900},
+        {"1h", "1h", 3600}, {"4h", "4h", 14400},   {"1d", "1D", 86400}, {"1w", "1W", 604800},
+        {"1M", "1M", 2592000},
+    };
+    return l;
+}
+
+qint64 intervalSecs(const QString& id) {
+    for (const auto& i : intervals())
+        if (i.id == id) return i.secs;
+    return 86400;
+}
+
 const Asset* findAsset(const QString& symbol) {
     for (const auto& a : catalog())
         if (a.symbol.compare(symbol, Qt::CaseInsensitive) == 0) return &a;

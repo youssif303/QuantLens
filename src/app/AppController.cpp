@@ -20,6 +20,7 @@ AppController::AppController(bool offline, QObject* parent) : QObject(parent), d
     model_.setSymbols(list);
 
     connect(&data_, &MarketData::historyReady, this, &AppController::onHistory);
+    connect(&data_, &MarketData::olderReady, this, &AppController::onOlder);
     connect(&feed_, &LiveFeed::tick, this, &AppController::onTick);
     connect(&feed_, &LiveFeed::connectionChanged, this, [this]() {
         if (feed_.cryptoConnected()) return;
@@ -86,13 +87,79 @@ QString AppController::status() const {
     const auto* it = model_.item(selected_);
     return it ? it->status : QString("...");
 }
-const Candles& AppController::candles() const {
+const Candles& AppController::dailyCandles() const {
     auto it = history_.constFind(selected_);
     return it == history_.constEnd() ? kEmpty : it.value();
+}
+const Candles& AppController::candles() const {
+    if (interval_ == "1d") return dailyCandles();
+    auto it = chart_.constFind(chartKey(selected_, interval_));
+    return it == chart_.constEnd() ? kEmpty : it.value();
 }
 bool AppController::crypto() const {
     const Asset* a = findAsset(selected_);
     return a && a->crypto;
+}
+QStringList AppController::intervals() const {
+    QStringList out;
+    const Asset* a = findAsset(selected_);
+    for (const auto& i : ql::intervals())
+        if (!a || a->supports(i.id)) out << i.id;
+    return out;
+}
+int AppController::coneBars(bool longHorizon) const {
+    const Asset* a = findAsset(selected_);
+    if (!a) return 0;
+    return longHorizon ? a->longHorizon() : a->shortHorizon();
+}
+
+void AppController::loadChart() {
+    if (interval_ == "1d") {
+        chartLoading_ = false;
+        return;
+    }
+    const Asset* a = findAsset(selected_);
+    if (!a) return;
+    chartLoading_ = !chart_.contains(chartKey(selected_, interval_));
+    data_.load(*a, interval_); // refresh in the background even when cached in memory
+}
+
+void AppController::setInterval(const QString& id) {
+    const Asset* a = findAsset(selected_);
+    if (id == interval_ || !a || !a->supports(id)) return;
+    interval_ = id;
+    loadChart();
+    emit intervalChanged();
+    emit chartReset();
+    emit chartChanged();
+}
+
+void AppController::requestOlder() {
+    const Asset* a = findAsset(selected_);
+    const Candles& c = candles();
+    if (!a || !a->crypto || c.empty() || loadingOlder_ || exhausted_.contains(chartKey(selected_, interval_))) return;
+    loadingOlder_ = true;
+    data_.loadOlder(*a, interval_, c.front().time);
+}
+
+void AppController::onOlder(const QString& symbol, const QString& interval, const Candles& older) {
+    loadingOlder_ = false;
+    const QString key = chartKey(symbol, interval);
+    Candles* target = interval == "1d" ? (history_.contains(symbol) ? &history_[symbol] : nullptr)
+                                       : (chart_.contains(key) ? &chart_[key] : nullptr);
+    if (!target || target->empty()) return;
+    Candles add;
+    for (const auto& c : older)
+        if (c.time < target->front().time) add.push_back(c);
+    if (add.empty()) {
+        exhausted_.insert(key);
+        return;
+    }
+    target->insert(target->begin(), add.begin(), add.end());
+    if (symbol == selected_ && interval == interval_) {
+        emit candlesPrepended(static_cast<int>(add.size()));
+        emit chartChanged();
+    }
 }
 
 void AppController::select(const QString& symbol) {
@@ -100,9 +167,15 @@ void AppController::select(const QString& symbol) {
     selected_ = symbol;
     result_ = AnalysisResult{};
     shortOut_ = longOut_ = shortBt_ = longBt_ = QVariantMap();
+    const Asset* a = findAsset(symbol);
+    if (a && !a->supports(interval_)) interval_ = "1d";
+    loadingOlder_ = false;
+    loadChart();
     emit selectedChanged();
+    emit intervalChanged();
     emit priceChanged();
     emit analysisChanged();
+    emit chartReset();
     emit chartChanged();
     if (history_.contains(symbol)) analyze();
 }
@@ -117,7 +190,7 @@ void AppController::addAsset(const QString& symbol) {
     l << a->symbol;
     model_.setSymbols(l);
     for (const auto& s : l) // rebuild keeps cached histories; refresh row data
-        if (history_.contains(s)) onHistory(s, history_[s], source_.value(s));
+        if (history_.contains(s)) onHistory(s, "1d", history_[s], source_.value(s));
     data_.load(*a);
     saveWatchlist();
     syncFeed();
@@ -130,7 +203,7 @@ void AppController::removeAsset(const QString& symbol) {
     l.removeAll(symbol);
     model_.setSymbols(l);
     for (const auto& s : l)
-        if (history_.contains(s)) onHistory(s, history_[s], source_.value(s));
+        if (history_.contains(s)) onHistory(s, "1d", history_[s], source_.value(s));
     saveWatchlist();
     syncFeed();
     if (selected_ == symbol) select(l.first());
@@ -145,7 +218,18 @@ QVariantList AppController::search(const QString& query) const {
     return out;
 }
 
-void AppController::onHistory(const QString& symbol, const Candles& c, const QString& source) {
+void AppController::onHistory(const QString& symbol, const QString& interval, const Candles& c, const QString& source) {
+    if (interval != "1d") {
+        if (symbol == selected_ && interval == interval_) {
+            chartLoading_ = false;
+            emit intervalChanged();
+        }
+        if (c.size() < 2) return;
+        chart_[chartKey(symbol, interval)] = c;
+        exhausted_.remove(chartKey(symbol, interval));
+        if (symbol == selected_ && interval == interval_) emit chartChanged();
+        return;
+    }
     if (c.size() < 2) return;
     // Don't let an older sample/cache snapshot overwrite fresher network data.
     if (source != "network" && source_.value(symbol) == "network" && history_.contains(symbol)) return;
@@ -171,23 +255,30 @@ void AppController::onTick(const QString& symbol, double price, double reference
     lastUpdate_ = QDateTime::currentDateTime().toString("HH:mm:ss");
 
     auto it = history_.find(symbol);
-    if (it != history_.end() && !it->empty()) {
-        Candles& c = it.value();
-        const std::int64_t now = QDateTime::currentSecsSinceEpoch();
-        const std::int64_t day = now - now % 86400;
-        if (c.back().time < day && realtime) {
-            c.push_back({day, price, price, price, price, 0});
-        } else {
-            Candle& l = c.back();
-            l.close = price;
-            l.high = std::max(l.high, price);
-            l.low = std::min(l.low, price);
-        }
+    const bool isCrypto = realtime;
+    if (it != history_.end() && !it->empty()) applyTick(it.value(), 86400, isCrypto, price, false);
+    if (interval_ != "1d" && symbol == selected_) {
+        auto ct = chart_.find(chartKey(symbol, interval_));
+        if (ct != chart_.end() && !ct->empty()) applyTick(ct.value(), intervalSecs(), isCrypto, price, true);
     }
     if (symbol == selected_) {
         emit priceChanged();
         chartDirty_ = true;
     }
+}
+
+void AppController::applyTick(Candles& c, qint64 secs, bool realtime, double price, bool) {
+    const std::int64_t now = QDateTime::currentSecsSinceEpoch();
+    const Candle last = c.back();
+    if (realtime && secs < 604800 && now >= last.time + secs) {
+        const std::int64_t t = last.time + ((now - last.time) / secs) * secs;
+        c.push_back({t, price, price, price, price, 0});
+        return;
+    }
+    Candle& l = c.back();
+    l.close = price;
+    l.high = std::max(l.high, price);
+    l.low = std::min(l.low, price);
 }
 
 void AppController::analyze() {

@@ -2,6 +2,7 @@
 #include "core/Csv.h"
 #include "core/Forecast.h"
 #include "core/Indicators.h"
+#include "core/Resample.h"
 
 #include <gtest/gtest.h>
 
@@ -68,6 +69,18 @@ TEST(Csv, RoundTrip) {
     ASSERT_EQ(d.size(), 2u);
     EXPECT_EQ(d[1].time, 1700086400);
     EXPECT_DOUBLE_EQ(d[0].high, 2.5);
+}
+
+TEST(Resample, AggregatesBuckets) {
+    Candles c{{0, 1, 2, 0.5, 1.5, 10}, {3600, 1.5, 3, 1, 2, 5}, {7200, 2, 2.5, 1.8, 2.2, 7}, {10800, 2.2, 4, 2, 3, 1}};
+    const Candles r = resample(c, 7200);
+    ASSERT_EQ(r.size(), 2u);
+    EXPECT_DOUBLE_EQ(r[0].open, 1);
+    EXPECT_DOUBLE_EQ(r[0].high, 3);
+    EXPECT_DOUBLE_EQ(r[0].low, 0.5);
+    EXPECT_DOUBLE_EQ(r[0].close, 2);
+    EXPECT_DOUBLE_EQ(r[0].volume, 15);
+    EXPECT_EQ(r[1].time, 7200);
 }
 
 TEST(Forecast, TooShortIsInvalid) {

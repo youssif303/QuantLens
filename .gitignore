@@ -6,3 +6,5 @@ CMakeLists.txt.user
 err.txt
 out.txt
 docs/shot_offline.png
+dist/
+shots/

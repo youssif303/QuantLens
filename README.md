@@ -13,7 +13,9 @@ model** so you can see how reliable it really is.
 ## Features
 
 - Watchlist with live price, daily change, sparkline and a green/red flash on every tick; search to add assets
-- Candlestick/line chart, SMA 20/50, Bollinger bands, RSI, crosshair tooltip, timeframes 1M to 5Y
+- Interactive chart: mouse-wheel zoom, drag to pan, double-click reset, candles/line, SMA 20/50, Bollinger, volume, RSI, MACD, log scale, crosshair tooltip
+- Candle intervals 1s, 1m, 5m, 15m, 1h, 4h, 1D, 1W, 1M (seconds for crypto only) and range presets 1D to Max; older history loads lazily for crypto
+- Responsive window that fits small/scaled screens
 - **Outlook cards** (short and long horizon): probability up/down, expected move, 80% range,
   confidence level and plain-language reasons (trend, momentum, volatility, RSI)
 - **Forecast cone** drawn into the future on the chart
@@ -83,4 +85,4 @@ For a distributable Windows build run `windeployqt` on `QuantLens.exe`.
 
 - Daily bars only; the daily candle is updated from live ticks but forecasts are not re-run per tick
 - Single-asset models; no portfolio or correlation view yet
-- Possible next steps: GARCH volatility, regime detection, intraday timeframes, MACD pane, QML tests
+- Possible next steps: GARCH volatility, regime detection, intraday forecasts, compare/overlay, alerts, QML tests

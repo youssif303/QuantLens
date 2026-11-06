@@ -4,13 +4,14 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: win
-    width: 1440
-    height: 880
-    minimumWidth: 1280
-    minimumHeight: 700
+    width: Math.min(1440, Screen.desktopAvailableWidth - 40)
+    height: Math.min(880, Screen.desktopAvailableHeight - 80)
+    minimumWidth: 900
+    minimumHeight: 520
     visible: true
     title: "QuantLens - " + app.selected
     color: Theme.bg
+    readonly property bool compact: width < 1250
 
     ColumnLayout {
         anchors.fill: parent
@@ -22,7 +23,7 @@ ApplicationWindow {
             spacing: 0
 
             Sidebar {
-                Layout.preferredWidth: 280
+                Layout.preferredWidth: win.compact ? 220 : 280
                 Layout.fillHeight: true
             }
 

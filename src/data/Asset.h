@@ -18,7 +18,16 @@ struct Asset {
     int longHorizon() const { return crypto ? 90 : 63; }
     QString shortLabel() const { return crypto ? "Next 7 days" : "Next 5 trading days"; }
     QString longLabel() const { return crypto ? "Next 3 months" : "Next 3 months"; }
+    bool supports(const QString& interval) const { return crypto || interval != "1s"; }
 };
+
+struct IntervalInfo {
+    QString id;    // also the Binance interval string
+    QString label;
+    qint64 secs;
+};
+const QList<IntervalInfo>& intervals();
+qint64 intervalSecs(const QString& id);
 
 const QList<Asset>& catalog();
 const Asset* findAsset(const QString& symbol);

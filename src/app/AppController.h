@@ -8,6 +8,7 @@
 
 #include <QFutureWatcher>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -30,6 +31,9 @@ class AppController : public QObject {
     Q_PROPERTY(QString status READ status NOTIFY priceChanged)
     Q_PROPERTY(QString lastUpdate READ lastUpdate NOTIFY priceChanged)
     Q_PROPERTY(QString dataSource READ dataSource NOTIFY selectedChanged)
+    Q_PROPERTY(QString interval READ interval NOTIFY intervalChanged)
+    Q_PROPERTY(QStringList intervals READ intervals NOTIFY selectedChanged)
+    Q_PROPERTY(bool chartLoading READ chartLoading NOTIFY intervalChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY analysisChanged)
     Q_PROPERTY(QVariantMap shortOutlook READ shortOutlook NOTIFY analysisChanged)
     Q_PROPERTY(QVariantMap longOutlook READ longOutlook NOTIFY analysisChanged)
@@ -57,7 +61,15 @@ public:
     const Forecast& shortForecast() const { return result_.shortF; }
     const Forecast& longForecast() const { return result_.longF; }
     bool crypto() const;
+    QString interval() const { return interval_; }
+    QStringList intervals() const;
+    bool chartLoading() const { return chartLoading_; }
+    qint64 intervalSecs() const { return ql::intervalSecs(interval_); }
+    const Candles& dailyCandles() const;
+    int coneBars(bool longHorizon) const;
 
+    Q_INVOKABLE void setInterval(const QString& id);
+    Q_INVOKABLE void requestOlder();
     Q_INVOKABLE void select(const QString& symbol);
     Q_INVOKABLE void addAsset(const QString& symbol);
     Q_INVOKABLE void removeAsset(const QString& symbol);
@@ -68,9 +80,16 @@ signals:
     void priceChanged();
     void analysisChanged();
     void chartChanged();
+    void intervalChanged();
+    void candlesPrepended(int n);
+    void chartReset();
 
 private:
-    void onHistory(const QString& symbol, const Candles& c, const QString& source);
+    void onHistory(const QString& symbol, const QString& interval, const Candles& c, const QString& source);
+    void onOlder(const QString& symbol, const QString& interval, const Candles& c);
+    void applyTick(Candles& c, qint64 secs, bool realtime, double price, bool intraday);
+    QString chartKey(const QString& symbol, const QString& interval) const { return symbol + "|" + interval; }
+    void loadChart();
     void onTick(const QString& symbol, double price, double reference, bool realtime);
     void analyze();
     void saveWatchlist();
@@ -82,7 +101,12 @@ private:
     MarketData data_;
     LiveFeed feed_;
     QHash<QString, Candles> history_;
+    QHash<QString, Candles> chart_;
     QHash<QString, QString> source_;
+    QString interval_{"1d"};
+    bool chartLoading_{false};
+    bool loadingOlder_{false};
+    QSet<QString> exhausted_;
     QString selected_;
     QString lastUpdate_{"-"};
     AnalysisResult result_;
