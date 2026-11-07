@@ -123,7 +123,7 @@ Rectangle {
                         spacing: 1
                         Text {
                             Layout.alignment: Qt.AlignRight
-                            text: price > 0 ? Theme.fmtPrice(price) : "-"
+                            text: price > 0 ? Theme.fmtPrice(price * (app.currency, app.displayFactor, app.factor(symbol))) : "-"
                             color: Theme.text
                             font.pixelSize: 13
                             font.family: Theme.font

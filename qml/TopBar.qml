@@ -18,7 +18,7 @@ Rectangle {
         }
 
         Text {
-            text: app.price > 0 ? Theme.fmtPrice(app.price) : "-"
+            text: app.price > 0 ? (app.selected.charAt(0) === "^" ? "" : (app.currency === "EUR" ? "\u20AC" : "$")) + Theme.fmtPrice(app.price * app.displayFactor) : "-"
             color: Theme.text
             font.pixelSize: 30
             font.bold: true
@@ -32,6 +32,22 @@ Rectangle {
         }
 
         Item { Layout.fillWidth: true }
+
+        Row {
+            spacing: 0
+            Layout.alignment: Qt.AlignVCenter
+            Repeater {
+                model: ["USD", "EUR"]
+                Rectangle {
+                    width: 46; height: 26
+                    radius: 6
+                    color: app.currency === modelData ? Theme.accent : "transparent"
+                    border.color: app.currency === modelData ? Theme.accent : Theme.border
+                    Text { anchors.centerIn: parent; text: modelData === "EUR" ? "\u20AC EUR" : "$ USD"; font.pixelSize: 11; color: app.currency === modelData ? "white" : Theme.muted }
+                    MouseArea { anchors.fill: parent; onClicked: app.setCurrency(modelData) }
+                }
+            }
+        }
 
         ColumnLayout {
             spacing: 2

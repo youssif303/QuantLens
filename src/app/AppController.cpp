@@ -3,6 +3,9 @@
 #include "core/Indicators.h"
 
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkReply>
 #include <QSettings>
 #include <QtConcurrent>
 
@@ -18,6 +21,14 @@ AppController::AppController(bool offline, QObject* parent) : QObject(parent), d
     QStringList list = s.value("watchlist", defaultWatchlist()).toStringList();
     if (list.isEmpty()) list = defaultWatchlist();
     model_.setSymbols(list);
+    currency_ = s.value("currency", "USD").toString();
+    eurUsd_ = s.value("eurUsd", 1.08).toDouble();
+    if (!offline) {
+        refreshFx();
+        auto* fxTimer = new QTimer(this);
+        connect(fxTimer, &QTimer::timeout, this, &AppController::refreshFx);
+        fxTimer->start(5 * 60 * 1000);
+    }
 
     connect(&data_, &MarketData::historyReady, this, &AppController::onHistory);
     connect(&data_, &MarketData::olderReady, this, &AppController::onOlder);
@@ -65,6 +76,35 @@ AppController::AppController(bool offline, QObject* parent) : QObject(parent), d
     syncFeed();
     feed_.setEnabled(!offline);
     select(model_.symbols().value(0));
+}
+
+double AppController::factor(const QString& symbol) const {
+    if (currency_ != "EUR" || symbol.startsWith('^')) return 1.0;
+    return 1.0 / eurUsd_;
+}
+
+void AppController::setCurrency(const QString& c) {
+    if ((c != "USD" && c != "EUR") || c == currency_) return;
+    currency_ = c;
+    QSettings().setValue("currency", c);
+    emit currencyChanged();
+    emit chartChanged();
+}
+
+void AppController::refreshFx() {
+    QNetworkRequest req(QUrl("https://data-api.binance.vision/api/v3/ticker/price?symbol=EURUSDT"));
+    req.setTransferTimeout(10000);
+    auto* r = fxNet_.get(req);
+    connect(r, &QNetworkReply::finished, this, [this, r]() {
+        r->deleteLater();
+        if (r->error() != QNetworkReply::NoError) return;
+        const double v = QJsonDocument::fromJson(r->readAll()).object()["price"].toString().toDouble();
+        if (v < 0.5 || v > 2.0) return;
+        eurUsd_ = v;
+        QSettings().setValue("eurUsd", v);
+        emit currencyChanged();
+        emit chartChanged();
+    });
 }
 
 void AppController::syncFeed() { feed_.setSymbols(model_.symbols()); }

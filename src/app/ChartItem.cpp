@@ -22,7 +22,10 @@ const QColor kBg("#0E1621"), kGrid("#1D2A3B"), kText("#8B9BB0"), kUp("#26C281"),
     kAccent("#4DA3FF"), kSma20("#F5B84D"), kSma50("#B388FF");
 constexpr double kLeft = 8, kRight = 74, kTop = 10, kAxisH = 20;
 
+double g_k = 1.0; // display-currency factor, set at the start of each paint
+
 QString fmtPrice(double v) {
+    v *= g_k;
     const double a = std::abs(v);
     if (a >= 1000) return QString::number(v, 'f', 0);
     if (a >= 10) return QString::number(v, 'f', 2);
@@ -218,6 +221,7 @@ void ChartItem::hoverLeaveEvent(QHoverEvent*) {
 void ChartItem::paint(QPainter* p) {
     p->fillRect(boundingRect(), kBg);
     if (!ctrl_) return;
+    g_k = ctrl_->displayFactor();
     const Candles& all = ctrl_->candles();
     const int n = static_cast<int>(all.size());
     if (n < 2) {

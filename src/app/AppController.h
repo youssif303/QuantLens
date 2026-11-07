@@ -7,6 +7,7 @@
 #include "data/MarketData.h"
 
 #include <QFutureWatcher>
+#include <QNetworkAccessManager>
 #include <QObject>
 #include <QSet>
 #include <QTimer>
@@ -34,6 +35,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString interval READ interval NOTIFY intervalChanged)
     Q_PROPERTY(QStringList intervals READ intervals NOTIFY selectedChanged)
     Q_PROPERTY(bool chartLoading READ chartLoading NOTIFY intervalChanged)
+    Q_PROPERTY(QString currency READ currency NOTIFY currencyChanged)
+    Q_PROPERTY(double displayFactor READ displayFactor NOTIFY currencyChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY analysisChanged)
     Q_PROPERTY(QVariantMap shortOutlook READ shortOutlook NOTIFY analysisChanged)
     Q_PROPERTY(QVariantMap longOutlook READ longOutlook NOTIFY analysisChanged)
@@ -68,6 +71,11 @@ public:
     const Candles& dailyCandles() const;
     int coneBars(bool longHorizon) const;
 
+    QString currency() const { return currency_; }
+    double displayFactor() const { return factor(selected_); }
+    // Multiplier from the asset's quote currency (USD) to the display currency; indices stay in points.
+    Q_INVOKABLE double factor(const QString& symbol) const;
+    Q_INVOKABLE void setCurrency(const QString& c);
     Q_INVOKABLE void setInterval(const QString& id);
     Q_INVOKABLE void requestOlder();
     Q_INVOKABLE void select(const QString& symbol);
@@ -81,6 +89,7 @@ signals:
     void analysisChanged();
     void chartChanged();
     void intervalChanged();
+    void currencyChanged();
     void candlesPrepended(int n);
     void chartReset();
 
@@ -104,6 +113,10 @@ private:
     QHash<QString, Candles> chart_;
     QHash<QString, QString> source_;
     QString interval_{"1d"};
+    QString currency_{"USD"};
+    double eurUsd_{1.08}; // USD per EUR; refreshed from Binance EURUSDT
+    QNetworkAccessManager fxNet_;
+    void refreshFx();
     bool chartLoading_{false};
     bool loadingOlder_{false};
     QSet<QString> exhausted_;
